@@ -407,12 +407,30 @@ def KmeansbasedFrameselectioncv2(
         ##resize the image visulization
         ##check nframes, own script to uses opencv
 
+    
+    '''
+    #delete old files py if needed
+    files_to_delete = [
+        "all_frames.npy",
+        "video_index_ranges.npy",
+        "frame_indices_per_video.npy",
+    ]
 
-    if os.path.exists("all_frames.npy"):
+    for filename in files_to_delete:
+        if os.path.exists(filename):
+            os.remove(filename)
+            print(f"Deleted {filename}")
+        else:
+            print(f"{filename} does not exist.")'''
+            
+    if os.path.exists("frame_indices_per_video.npy") and os.path.exists("video_index_ranges.npy") and os.path.exists("all_frames.npy"):
         all_frames = np.load("all_frames.npy")
-        #frame_indices_per_video = np.load("frame_indices_per_video.npy", allow_pickle=True)
-        #video_index_ranges = np.load("video_index_ranges.npy")
         print("Loaded all_frames from file.")
+        frame_indices_per_video = np.load("frame_indices_per_video.npy", allow_pickle=True).tolist()
+        print("Loaded frame_indices_per_video from file.")
+        video_index_ranges = np.load("video_index_ranges.npy")
+        print("Loaded video_index_ranges from file.")
+        
     else:
         video_index_ranges = []   # need to be a  global variable
         frame_indices_per_video = []  # need to be a global variable and be remembered
@@ -562,20 +580,24 @@ def KmeansbasedFrameselectioncv2(
                 print(all_frames.shape)
         
             Index = None
-        
+        #all_frames : (total_frames_from_all_videos, flattened_frame_dimension)
+        #no color : flattened_frame_dimension = height * width
         np.save("all_frames.npy", all_frames)
         print("Saved all_frames to all_frames.npy")
         np.save("video_index_ranges.npy", video_index_ranges)
         print("Saved video_index_ranges to video_index_ranges.npy")
-        np.save("frame_indices_per_video.npy", frame_indices_per_video, allow_pickle=True)
+        # Ensure each item is a NumPy array
+        frame_indices_per_video = [np.array(index_array) for index_array in frame_indices_per_video]
+        # Save with enforced object dtype
+        np.save("frame_indices_per_video.npy", np.array(frame_indices_per_video, dtype=object), allow_pickle=True)
         print("Saved frame_indices_per_video to frame_indices_per_video.npy")
-
+        
     if all_frames is None:
         print("No frames extracted.")
         return
         #added begin
 
-
+    print(all_frames.shape)
         # Visualization of K-Means Clustering Results
     import matplotlib.pyplot as plt
     import seaborn as sns
@@ -655,7 +677,7 @@ def KmeansbasedFrameselectioncv2(
     visualizer.show()
     optimal_k = visualizer.elbow_value_
     print(f"Optimal number of clusters determined by Elbow Method: {optimal_k}")'''
-    from sklearn.metrics import silhouette_samples
+    '''from sklearn.metrics import silhouette_samples
     k_range = range(5, 10)
 
     for n_clusters in k_range:
@@ -686,8 +708,56 @@ def KmeansbasedFrameselectioncv2(
         plt.tight_layout()
         plt.show()
         # Perform KMeans clustering
-    print("Kmeans clustering ... (this might take a while)")
-    '''final_k = 5
+    print("Kmeans clustering ... (this might take a while)")'''
+
+    #umap before clustering
+
+    from umap import UMAP
+    from sklearn.cluster import MiniBatchKMeans
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    from sklearn.metrics import silhouette_score, calinski_harabasz_score
+
+    umap_dimensions = [10, 100, 1000]  # Different UMAP dimensions to test
+    k_values = [3, 6, 10]
+    results = []
+
+    for dim in umap_dimensions:
+        print(f"Processing UMAP with n_components={dim}")
+        umap = UMAP(n_components=dim, random_state=42)
+        reduced_data = umap.fit_transform(all_frames)
+
+        for k in k_values:
+            kmeans = MiniBatchKMeans(n_clusters=k, random_state=42)
+            labels = kmeans.fit_predict(reduced_data)
+
+            silhouette = silhouette_score(reduced_data, labels)
+            calinski = calinski_harabasz_score(reduced_data, labels)
+
+            results.append({
+                "UMAP_dim": dim,
+                "k": k,
+                "Silhouette Score": silhouette,
+                "Calinski-Harabasz Score": calinski
+            })
+
+    results_df = pd.DataFrame(results)
+    print(results_df)
+
+    # Plotting
+    fig, axs = plt.subplots(1, 2, figsize=(14, 5))
+    sns.lineplot(data=results_df, x='k', y='Silhouette Score', hue='UMAP_dim', marker="o", ax=axs[0])
+    axs[0].set_title("Silhouette Score vs k")
+    axs[0].set_xticks(k_values)
+
+    sns.lineplot(data=results_df, x='k', y='Calinski-Harabasz Score', hue='UMAP_dim', marker="o", ax=axs[1])
+    axs[1].set_title("Calinski-Harabasz Score vs k")
+    axs[1].set_xticks(k_values)
+
+    plt.tight_layout()
+    plt.show()
+
+    final_k = 5
     kmeans = MiniBatchKMeans(
         n_clusters=final_k, tol=1e-3, batch_size=batchsize, max_iter=max_iter
     )
@@ -716,8 +786,8 @@ def KmeansbasedFrameselectioncv2(
 
 
     ## working on this
-
     frames2pick = []
+    print("Saving")
     for clusterid in range(final_k):
         clusterids = np.where(clusterid == kmeans.labels_)[0]
         if len(clusterids) > 0:
@@ -728,18 +798,20 @@ def KmeansbasedFrameselectioncv2(
         return
 
     print("Saving selected frames...")
-
+    print(frames2pick)
+    print(video_index_ranges)
     # Map each global index to a specific video + frame
+    video_path_list = list(video_paths.keys())
     is_valid = []
-    print("a")
     for idx in frames2pick:
         for vid, (start, end) in enumerate(video_index_ranges):
             if start <= idx < end:
-                print(idx)
                 local_index = idx - start
                 frame_number = frame_indices_per_video[vid][local_index]
-                video_path = video_paths[vid]
-
+                print(vid)
+                print(video_path_list)
+                video_path = video_path_list[vid]
+                print('1')
                 cap = cv2.VideoCapture(video_path)
                 cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
                 ret, frame = cap.read()
@@ -770,7 +842,7 @@ def KmeansbasedFrameselectioncv2(
         print("All selected frames were invalid or could not be saved.")
         return []
 
-    return frames2pick'''
+    return frames2pick
     
 
     '''nframes = len(cap)
