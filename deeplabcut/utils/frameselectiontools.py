@@ -709,55 +709,83 @@ def KmeansbasedFrameselectioncv2(
         plt.show()
         # Perform KMeans clustering
     print("Kmeans clustering ... (this might take a while)")'''
-
-    #umap before clustering
-
-    from umap import UMAP
+    import numpy as np
+    import cv2
+    from pathlib import Path
+    from skimage import img_as_ubyte
     from sklearn.cluster import MiniBatchKMeans
-    import matplotlib.pyplot as plt
-    import seaborn as sns
-    from sklearn.metrics import silhouette_score, calinski_harabasz_score
+    from umap import UMAP
+    from sklearn.metrics import silhouette_score, davies_bouldin_score
 
-    umap_dimensions = [10, 100, 1000]  # Different UMAP dimensions to test
-    k_values = [3, 6, 10]
-    results = []
+    '''
+    # dimensions to reduce testing
+    save_root = Path(config).parents[0] / "cluster-test"
+    save_root.mkdir(parents=True, exist_ok=True)
+    umap_dims = [10, 100, 1000]
+    k = 30
+    video_path_list = list(video_paths.keys())
+    clustered_frames = {}
 
-    for dim in umap_dimensions:
-        print(f"Processing UMAP with n_components={dim}")
+    # Helper to map global index to frame number and video path
+    def get_frame_info(global_index):
+        for vid, (start, end) in enumerate(video_index_ranges):
+            if start <= global_index < end:
+                local_index = global_index - start
+                frame_number = frame_indices_per_video[vid][local_index]
+                video_path = video_path_list[vid]
+                return int(frame_number), video_path
+        return None, None
+    
+
+    for dim in umap_dims:
+        print("Reducing dimensions with UMAP to", dim, "components...")
         umap = UMAP(n_components=dim, random_state=42)
-        reduced_data = umap.fit_transform(all_frames)
+        reduced = umap.fit_transform(all_frames)
+        kmeans = MiniBatchKMeans(n_clusters = k, random_state=42)
+        labels = kmeans.fit_predict(reduced)
 
-        for k in k_values:
-            kmeans = MiniBatchKMeans(n_clusters=k, random_state=42)
-            labels = kmeans.fit_predict(reduced_data)
+        # Evaluation
+        if len(set(labels)) > 1:
+            sil_score = silhouette_score(reduced, labels)
+            dbi_score = davies_bouldin_score(reduced, labels)
+            print(f"UMAP Dim: {dim} | Silhouette Score: {sil_score:.4f} | Davies-Bouldin Index: {dbi_score:.4f}")
+        else:
+            print(f"UMAP Dim: {dim} | Only one cluster found, cannot compute Silhouette or DBI.")
 
-            silhouette = silhouette_score(reduced_data, labels)
-            calinski = calinski_harabasz_score(reduced_data, labels)
+        for cluster_id in range(k):
+            print("Processing cluster", cluster_id, "in UMAP dimension", dim)
+            cluster_indices = np.where(labels == cluster_id)[0]
+            sampled_indices = np.random.choice(cluster_indices, size=min(3, len(cluster_indices)), replace=False)
 
-            results.append({
-                "UMAP_dim": dim,
-                "k": k,
-                "Silhouette Score": silhouette,
-                "Calinski-Harabasz Score": calinski
-            })
+            cluster_folder = save_root / f"umap_{dim}" / f"cluster_{cluster_id}"
+            cluster_folder.mkdir(parents=True, exist_ok=True)
 
-    results_df = pd.DataFrame(results)
-    print(results_df)
+            for idx in sampled_indices:
+                frame_number, video_path = get_frame_info(idx)
+                print("Processing frame number", frame_number, "in video", video_path)
+                if video_path is None:
+                    continue
 
-    # Plotting
-    fig, axs = plt.subplots(1, 2, figsize=(14, 5))
-    sns.lineplot(data=results_df, x='k', y='Silhouette Score', hue='UMAP_dim', marker="o", ax=axs[0])
-    axs[0].set_title("Silhouette Score vs k")
-    axs[0].set_xticks(k_values)
+                cap = cv2.VideoCapture(video_path)
+                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+                ret, frame = cap.read()
+                cap.release()
 
-    sns.lineplot(data=results_df, x='k', y='Calinski-Harabasz Score', hue='UMAP_dim', marker="o", ax=axs[1])
-    axs[1].set_title("Calinski-Harabasz Score vs k")
-    axs[1].set_xticks(k_values)
+                if ret and frame is not None:
+                    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    image = img_as_ubyte(frame)
 
-    plt.tight_layout()
-    plt.show()
+                    video_name = Path(video_path).stem
+                    filename = f"{video_name}_frame{frame_number}.png"
+                    filepath = cluster_folder / filename
+                    cv2.imwrite(str(filepath), cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
 
-    final_k = 5
+    # List top-level directories where images were saved
+    sorted(list(save_root.glob("*")))'''
+
+
+    
+    final_k = 30
     kmeans = MiniBatchKMeans(
         n_clusters=final_k, tol=1e-3, batch_size=batchsize, max_iter=max_iter
     )
@@ -798,8 +826,7 @@ def KmeansbasedFrameselectioncv2(
         return
 
     print("Saving selected frames...")
-    print(frames2pick)
-    print(video_index_ranges)
+    
     # Map each global index to a specific video + frame
     video_path_list = list(video_paths.keys())
     is_valid = []
