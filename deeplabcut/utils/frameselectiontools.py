@@ -214,7 +214,8 @@ def KmeansbasedFrameselection(
 
 
 def KmeansbasedFrameselectioncv2(
-    cap,
+    config,
+    video_paths,
     numframes2pick,
     start,
     stop,
@@ -236,7 +237,269 @@ def KmeansbasedFrameselectioncv2(
 
     Attention: the flow of commands was not optimized for readability, but rather speed. This is why it might appear tedious and repetitive.
     """
-    nframes = len(cap)
+    ##modify
+    import os
+    import sys
+    import re
+    import glob
+    from tqdm import tqdm
+    import math
+    import cv2
+    from sklearn.cluster import MiniBatchKMeans
+    import numpy as np
+    from pathlib import Path
+    from skimage import io
+    from skimage.util import img_as_ubyte
+    from deeplabcut.utils import auxiliaryfunctions, auxfun_videos
+    from deeplabcut.utils.auxfun_videos import VideoWriter
+    
+    project_dir = Path(config).parents[0]  # one level up from config.yaml
+
+    print("Project directory:", project_dir)
+    all_frames_path = project_dir / "all_frames.npy"
+    frame_indices_path = project_dir / "frame_indices_per_video.npy"
+    video_ranges_path = project_dir / "video_index_ranges.npy"
+
+
+    if all_frames_path.exists() and frame_indices_path.exists() and video_ranges_path.exists():
+        all_frames = np.load(all_frames_path)
+        print("Loaded all_frames from file:", all_frames_path)
+
+        frame_indices_per_video = np.load(frame_indices_path, allow_pickle=True).tolist()
+        print("Loaded frame_indices_per_video from file:", frame_indices_path)
+
+        video_index_ranges = np.load(video_ranges_path)
+        print("Loaded video_index_ranges from file:", video_ranges_path)
+    
+    else:
+        video_index_ranges = []   # need to be a  global variable
+        frame_indices_per_video = []  # need to be a global variable and be remembered
+        all_frames = None
+        current_idx = 0
+        for video in video_paths:
+            print("Loading ", video)
+            print("updated")
+            cap = VideoWriter(video)
+            nframes = len(cap)
+            nx, ny = cap.dimensions
+            ratio = resizewidth * 1.0 / nx
+            if ratio > 1:
+                raise Exception("Choice of resizewidth actually upsamples!")
+
+            if not nframes:
+                print("Video could not be opened. Skipping...")
+                continue
+            
+
+            startindex = int(np.floor(nframes * start))
+            stopindex = int(np.ceil(nframes * stop))
+
+            if Index is None:
+                Index = np.arange(startindex, stopindex, step)
+            else:
+                Index = np.array(Index)
+                Index = Index[(Index > startindex) * (Index < stopindex)]  # crop to range!
+
+            nframes = len(Index)
+            if batchsize > nframes:
+                batchsize = nframes // 2
+
+            frame_indices_per_video.append(Index)
+            video_index_ranges.append((current_idx, current_idx + nframes))
+            current_idx += nframes
+            #doesn't take into account len(index) < numframes2pick
+
+            allocated = False
+            if len(Index) >= numframes2pick:
+                if (
+                    np.mean(np.diff(Index)) > 1
+                ):  # then non-consecutive indices are present, thus cap.set is required (which slows everything down!)
+                    print("Extracting and downsampling...", nframes, " frames from the video.")
+                    if color:
+                        for counter, index in tqdm(enumerate(Index)):
+                            cap.set_to_frame(index)  # extract a particular frame
+                            frame = cap.read_frame(crop=True) #one frame into np.array
+                            if frame is not None:
+                                image = img_as_ubyte(
+                                    cv2.resize(
+                                        frame,
+                                        None,
+                                        fx=ratio,
+                                        fy=ratio,
+                                        interpolation=cv2.INTER_NEAREST,
+                                    ) #plot intermedium steps to make sure it works.
+                                )  # color trafo not necessary; lack thereof improves speed.
+                                if (
+                                    not allocated
+                                ):  #'DATA' not in locals(): #allocate memory in first pass
+                                    DATA = np.empty(
+                                        (nframes, np.shape(image)[0], np.shape(image)[1] * 3)
+                                    )
+                                    allocated = True
+                                DATA[counter, :, :] = np.hstack(
+                                    [image[:, :, 0], image[:, :, 1], image[:, :, 2]]
+                                )
+                    else:
+                        for counter, index in tqdm(enumerate(Index)):
+                            cap.set_to_frame(index)  # extract a particular frame
+                            frame = cap.read_frame(crop=True)
+                            if frame is not None:
+                                image = img_as_ubyte(
+                                    cv2.resize(
+                                        frame,
+                                        None,
+                                        fx=ratio,
+                                        fy=ratio,
+                                        interpolation=cv2.INTER_NEAREST,
+                                    )
+                                )  # color trafo not necessary; lack thereof improves speed.
+                                if (
+                                    not allocated
+                                ):  #'DATA' not in locals(): #allocate memory in first pass
+                                    DATA = np.empty(
+                                        (nframes, np.shape(image)[0], np.shape(image)[1])
+                                    )
+                                    allocated = True
+                                DATA[counter, :, :] = np.mean(image, 2)
+                else:
+                    print("Extracting and downsampling...", nframes, " frames from the video.")
+                    if color:
+                        for counter, index in tqdm(enumerate(Index)):
+                            frame = cap.read_frame(crop=True)
+                            if frame is not None:
+                                image = img_as_ubyte(
+                                    cv2.resize(
+                                        frame,
+                                        None,
+                                        fx=ratio,
+                                        fy=ratio,
+                                        interpolation=cv2.INTER_NEAREST,
+                                    )
+                                )  # color trafo not necessary; lack thereof improves speed.
+                                if (
+                                    not allocated
+                                ):  #'DATA' not in locals(): #allocate memory in first pass
+                                    DATA = np.empty(
+                                        (nframes, np.shape(image)[0], np.shape(image)[1] * 3)
+                                    )
+                                    allocated = True
+                                DATA[counter, :, :] = np.hstack(
+                                    [image[:, :, 0], image[:, :, 1], image[:, :, 2]]
+                                )
+                    else:
+                        for counter, index in tqdm(enumerate(Index)):
+                            frame = cap.read_frame(crop=True)
+                            if frame is not None:
+                                image = img_as_ubyte(
+                                    cv2.resize(
+                                        frame,
+                                        None,
+                                        fx=ratio,
+                                        fy=ratio,
+                                        interpolation=cv2.INTER_NEAREST,
+                                    )
+                                )  # color trafo not necessary; lack thereof improves speed.
+                                if (
+                                    not allocated
+                                ):  #'DATA' not in locals(): #allocate memory in first pass
+                                    DATA = np.empty(
+                                        (nframes, np.shape(image)[0], np.shape(image)[1])
+                                    )
+                                    allocated = True
+                                DATA[counter, :, :] = np.mean(image, 2)
+
+            data = DATA - DATA.mean(axis=0)
+            data = data.reshape(nframes, -1)  # stacking
+            print(data.shape)
+            
+            if all_frames is None:
+                all_frames = data  # First video, set all_frames
+            else:
+                all_frames = np.concatenate((all_frames, data), axis=0)  # Append frames
+                print(all_frames.shape)
+        
+            Index = None
+        #all_frames : (total_frames_from_all_videos, flattened_frame_dimension)
+        #no color : flattened_frame_dimension = height * width
+        # Save all_frames
+        np.save(all_frames_path, all_frames)
+        print(f"Saved all_frames to {all_frames_path}")
+
+        # Save video_index_ranges
+        np.save(video_ranges_path, video_index_ranges)
+        print(f"Saved video_index_ranges to {video_ranges_path}")
+
+        # Ensure frame_indices_per_video is properly formatted before saving
+        frame_indices_per_video = [np.array(index_array) for index_array in frame_indices_per_video]
+        np.save(frame_indices_path, np.array(frame_indices_per_video, dtype=object), allow_pickle=True)
+        print(f"Saved frame_indices_per_video to {frame_indices_path}")
+        
+    if all_frames is None:
+        print("No frames extracted.")
+        return
+    
+
+    final_k = 40
+    kmeans = MiniBatchKMeans(
+        n_clusters=final_k, tol=1e-3, batch_size=batchsize, max_iter=max_iter
+    )
+    kmeans.fit(all_frames)
+
+    frames2pick = []
+    print("Saving")
+    for clusterid in range(final_k):
+        clusterids = np.where(clusterid == kmeans.labels_)[0]
+        if len(clusterids) > 0:
+            frames2pick.append(np.random.choice(clusterids))
+
+    if not frames2pick:
+        print("Frame selection failed.")
+        return
+
+    print("Saving selected frames...")
+    
+    # Map each global index to a specific video + frame
+    is_valid = []
+    for idx in frames2pick:
+        for vid, (start, end) in enumerate(video_index_ranges):
+            if start <= idx < end:
+                local_index = idx - start
+                frame_number = frame_indices_per_video[vid][local_index]
+                print(vid)
+                video_path = video_paths[vid]
+                cap = cv2.VideoCapture(video_path)
+                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+                ret, frame = cap.read()
+
+                if ret and frame is not None:
+                    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    image = img_as_ubyte(frame)
+                    indexlength = int(np.ceil(np.log10(cap.get(cv2.CAP_PROP_FRAME_COUNT))))
+                    
+                    output_path = Path(config).parents[0] / "labeled-data" / Path(video_path).stem
+                    output_path.mkdir(parents=True, exist_ok=True)
+
+                    img_name = (
+                        str(output_path)
+                        + "/img"
+                        + str(frame_number).zfill(indexlength)
+                        + ".png"
+                    )
+                    io.imsave(img_name, image)
+                    is_valid.append(True)
+                else:
+                    print("Frame", frame_number, "not found!")
+                    is_valid.append(False)
+
+                cap.release()
+
+    if not any(is_valid):
+        print("All selected frames were invalid or could not be saved.")
+        return []
+
+    return frames2pick
+
+    '''nframes = len(cap)
     nx, ny = cap.dimensions
     ratio = resizewidth * 1.0 / nx
     if ratio > 1:
@@ -355,4 +618,4 @@ def KmeansbasedFrameselectioncv2(
         # cap.release() >> still used in frame_extraction!
         return list(np.array(frames2pick))
     else:
-        return list(Index)
+        return list(Index)'''

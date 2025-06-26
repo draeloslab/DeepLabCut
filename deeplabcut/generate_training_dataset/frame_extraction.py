@@ -298,7 +298,7 @@ def extract_frames(
             from moviepy.editor import VideoFileClip
 
         has_failed = []
-        for video in videos:
+        """for video in videos:
             if userfeedback:
                 print(
                     "Do you want to extract (perhaps additional) frames for video:",
@@ -366,40 +366,42 @@ def extract_frames(
                             x2=int(coords[1]),
                         )
                 else:
-                    coords = None
+                    coords = None"""
 
-                print("Extracting frames based on %s ..." % algo)
-                if algo == "uniform":
-                    if opencv:
-                        frames2pick = frameselectiontools.UniformFramescv2(
-                            cap, numframes2pick, start, stop
-                        )
-                    else:
-                        frames2pick = frameselectiontools.UniformFrames(
-                            clip, numframes2pick, start, stop
-                        )
-                elif algo == "kmeans":
-                    if opencv:
-                        frames2pick = frameselectiontools.KmeansbasedFrameselectioncv2(
-                            cap,
-                            numframes2pick,
-                            start,
-                            stop,
-                            step=cluster_step,
-                            resizewidth=cluster_resizewidth,
-                            color=cluster_color,
-                        )
-                    else:
-                        frames2pick = frameselectiontools.KmeansbasedFrameselection(
-                            clip,
-                            numframes2pick,
-                            start,
-                            stop,
-                            step=cluster_step,
-                            resizewidth=cluster_resizewidth,
-                            color=cluster_color,
-                        )
-                else:
+        print("Extracting frames based on %s ..." % algo)
+        if algo == "uniform":
+            if opencv:
+                frames2pick = frameselectiontools.UniformFramescv2(
+                    cap, numframes2pick, start, stop
+                )
+            else:
+                frames2pick = frameselectiontools.UniformFrames(
+                    clip, numframes2pick, start, stop
+                )
+        elif algo == "kmeans":
+            if opencv:
+                ##moidfied video_list
+                frames2pick = frameselectiontools.KmeansbasedFrameselectioncv2(
+                    config,
+                    videos,
+                    numframes2pick,
+                    start,
+                    stop,
+                    step=cluster_step,
+                    resizewidth=cluster_resizewidth,
+                    color=cluster_color,
+                )
+            else:
+                frames2pick = frameselectiontools.KmeansbasedFrameselection(
+                    clip,
+                    numframes2pick,
+                    start,
+                    stop,
+                    step=cluster_step,
+                    resizewidth=cluster_resizewidth,
+                    color=cluster_color,
+                )
+                '''else:
                     print(
                          "Please implement this method yourself and send us a pull "
                          "request! Otherwise, choose 'uniform' or 'kmeans'."
@@ -564,7 +566,7 @@ def extract_frames(
                                 ],
                             )
                         else:
-                            io.imsave(img_name, image)
+                            io.imsave(img_name, image)'''
         print(
             "\n Done extracting matched frames. You can now begin labeling frames using the function label_frames\n"
         )
