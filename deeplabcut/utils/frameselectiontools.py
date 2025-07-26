@@ -785,30 +785,37 @@ def KmeansbasedFrameselectioncv2(
 
 
     
+    from sklearn.manifold import TSNE
+    import umap
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    from sklearn.cluster import MiniBatchKMeans
+
+    # KMeans clustering
     final_k = 30
     kmeans = MiniBatchKMeans(
         n_clusters=final_k, tol=1e-3, batch_size=batchsize, max_iter=max_iter
     )
     kmeans.fit(all_frames)
-    # Reduce dimensions using PCA for visualization
-    pca = PCA(n_components=2)
-    data_pca = pca.fit_transform(all_frames)
-        
-        # Plot clustered frames
-    plt.figure(figsize=(6, 6))
-    sns.scatterplot(x=data_pca[:, 0], y=data_pca[:, 1], hue=kmeans.labels_, palette="Set1", s=10, alpha=0.8, legend=False)
-        
-        # Plot cluster centers
-    cluster_centers = pca.transform(kmeans.cluster_centers_)
-    plt.scatter(cluster_centers[:, 0], cluster_centers[:, 1], c="black", s=100, edgecolors="white", marker="o")
-        
-        # Add train time and inertia text
-    plt.text(min(data_pca[:, 0]), max(data_pca[:, 1]), f"inertia: {kmeans.inertia_:.6f}", fontsize=10)
-        ##loop, find the optimal number of clustering, pick the best clustering
-    plt.title("K-Means Frame Selection Visualization")
-    plt.xticks([])
-    plt.yticks([])
-    plt.show()
+    labels = kmeans.labels_
+
+    # Dimensionality reduction
+    umap_embedding = umap.UMAP(n_neighbors=15, min_dist=0.1, n_components=2).fit_transform(all_frames)
+    tsne_embedding = TSNE(n_components=2, perplexity=30, n_iter=1000, random_state=42).fit_transform(all_frames)
+
+    # Visualization function
+    def plot_embedding(embedding, title):
+        plt.figure(figsize=(6, 6))
+        sns.scatterplot(x=embedding[:, 0], y=embedding[:, 1], hue=labels, palette="Set1", s=10, alpha=0.8, legend=False)
+        plt.title(title)
+        plt.xticks([])
+        plt.yticks([])
+        plt.text(min(embedding[:, 0]), max(embedding[:, 1]), f"inertia: {kmeans.inertia_:.6f}", fontsize=10)
+        plt.show()
+
+    # Plot UMAP and t-SNE
+    plot_embedding(umap_embedding, "UMAP Frame Selection Visualization")
+    plot_embedding(tsne_embedding, "t-SNE Frame Selection Visualization")
 
         #added end
 
