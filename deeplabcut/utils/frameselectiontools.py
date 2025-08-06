@@ -438,20 +438,30 @@ def KmeansbasedFrameselectioncv2(
         print("No frames extracted.")
         return
     
+    from sklearn.decomposition import PCA
+    from sklearn.manifold import TSNE
+    import umap
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    from sklearn.cluster import MiniBatchKMeans
 
-    final_k = 40
+    final_k = 30
     kmeans = MiniBatchKMeans(
         n_clusters=final_k, tol=1e-3, batch_size=batchsize, max_iter=max_iter
     )
     kmeans.fit(all_frames)
+    labels = kmeans.labels_
+
+    # Dimensionality reduction
+    tsne_embedding = TSNE(n_components=2, perplexity=30, n_iter=1000, random_state=42).fit_transform(all_frames)
 
     frames2pick = []
     print("Saving")
     for clusterid in range(final_k):
         clusterids = np.where(clusterid == kmeans.labels_)[0]
         if len(clusterids) > 0:
-            frames2pick.append(np.random.choice(clusterids))
-
+            selected = np.random.choice(clusterids)
+            frames2pick.append((clusterid, selected))  # tuple: (cluster, frame index)
     if not frames2pick:
         print("Frame selection failed.")
         return
@@ -460,12 +470,13 @@ def KmeansbasedFrameselectioncv2(
     
     # Map each global index to a specific video + frame
     is_valid = []
-    for idx in frames2pick:
+    for clusterid, idx in frames2pick:
         for vid, (start, end) in enumerate(video_index_ranges):
             if start <= idx < end:
                 local_index = idx - start
                 frame_number = frame_indices_per_video[vid][local_index]
-                print(vid)
+                video_name = Path(video_paths[vid]).stem
+                print(f"Saving frame {frame_number} from cluster {clusterid} and video '{video_name}'")
                 video_path = video_paths[vid]
                 cap = cv2.VideoCapture(video_path)
                 cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
@@ -496,6 +507,31 @@ def KmeansbasedFrameselectioncv2(
     if not any(is_valid):
         print("All selected frames were invalid or could not be saved.")
         return []
+    def plot_embedding(embedding, title, labeled_points=None):
+        plt.figure(figsize=(6, 6))
+        sns.scatterplot(
+            x=embedding[:, 0], y=embedding[:, 1], hue=labels,
+            palette="Set1", s=10, alpha=0.8, legend=False
+        )
+        plt.title(title)
+        plt.xticks([])
+        plt.yticks([])
+        plt.text(
+            min(embedding[:, 0]), max(embedding[:, 1]),
+            f"inertia: {kmeans.inertia_:.6f}", fontsize=10
+        )
+
+        # Add cluster ID labels on selected points
+        if labeled_points:
+            for clusterid, point_idx in labeled_points:
+                x, y = embedding[point_idx]
+                plt.text(x, y, str(clusterid), fontsize=9, weight='bold', color='black', ha='center')
+
+        plt.show()
+
+
+    # Plot UMAP and t-SNE
+    plot_embedding(tsne_embedding, "t-SNE Frame Selection Visualization", labeled_points=frames2pick)
 
     return frames2pick
 
