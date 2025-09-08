@@ -453,7 +453,7 @@ def KmeansbasedFrameselectioncv2(
     labels = kmeans.labels_
 
     # Dimensionality reduction
-    tsne_embedding = TSNE(n_components=2, perplexity=30, n_iter=1000, random_state=42).fit_transform(all_frames)
+    #tsne_embedding = TSNE(n_components=2, perplexity=30, n_iter=1000, random_state=42).fit_transform(all_frames)
 
     frames2pick = []
     print("Saving")
@@ -507,7 +507,7 @@ def KmeansbasedFrameselectioncv2(
     if not any(is_valid):
         print("All selected frames were invalid or could not be saved.")
         return []
-    def plot_embedding(embedding, title, labeled_points=None):
+    '''def plot_embedding(embedding, title, labeled_points=None):
         plt.figure(figsize=(6, 6))
         sns.scatterplot(
             x=embedding[:, 0], y=embedding[:, 1], hue=labels,
@@ -527,11 +527,11 @@ def KmeansbasedFrameselectioncv2(
                 x, y = embedding[point_idx]
                 plt.text(x, y, str(clusterid), fontsize=9, weight='bold', color='black', ha='center')
 
-        plt.show()
+        plt.show()'''
 
 
     # Plot UMAP and t-SNE
-    plot_embedding(tsne_embedding, "t-SNE Frame Selection Visualization", labeled_points=frames2pick)
+    # plot_embedding(tsne_embedding, "t-SNE Frame Selection Visualization", labeled_points=frames2pick)
 
     return frames2pick
 
