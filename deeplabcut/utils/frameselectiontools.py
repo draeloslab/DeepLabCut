@@ -445,7 +445,77 @@ def KmeansbasedFrameselectioncv2(
     import seaborn as sns
     from sklearn.cluster import MiniBatchKMeans
 
-    final_k = 30
+    '''# DBI to find optimal k
+    from sklearn.metrics import davies_bouldin_score
+    k_values = range(2, 70, 2)  # Example k values to try
+    dbi_scores = []
+
+    print("Evaluating clustering quality with Davies-Bouldin Index...")
+    for k in k_values:
+        kmeans = MiniBatchKMeans(n_clusters=k, random_state=10, batch_size=batchsize, max_iter=max_iter)
+        kmeans.fit(all_frames)
+        labels = kmeans.labels_
+
+        dbi = davies_bouldin_score(all_frames, labels)
+        dbi_scores.append(dbi)
+        print(f"k = {k}, DBI = {dbi:.4f}")
+
+    # Plot DBI vs k
+    plt.figure(figsize=(8, 5))
+    plt.plot(k_values, dbi_scores, marker='o', linestyle='-')
+    plt.xlabel("Number of clusters (k)")
+    plt.ylabel("Davies-Bouldin Index")
+    plt.title("Optimal k by Davies-Bouldin Index")
+    plt.grid(True)
+    plt.show()
+
+    # Find the optimal k (minimum DBI)
+    optimal_k = k_values[dbi_scores.index(min(dbi_scores))]
+    print(f"Optimal number of clusters based on DBI: {optimal_k}")
+
+    # Silhouette analysis for a range of k values
+    from sklearn.metrics import silhouette_score
+    k_range = range(5, 40, 5)
+    mean_silhouette = []
+
+    for n_clusters in k_range:
+        clusterer = MiniBatchKMeans(n_clusters=n_clusters, random_state=10)
+        cluster_labels = clusterer.fit_predict(all_frames)
+    
+        # Compute the average silhouette score for this k
+        score = silhouette_score(all_frames, cluster_labels)
+        mean_silhouette.append(score)
+
+    # --- Plot ---
+    plt.figure(figsize=(8, 5))
+    plt.plot(k_range, mean_silhouette, marker="o", linestyle="-", color="b")
+    plt.xlabel("Number of clusters (k)")
+    plt.ylabel("Mean silhouette score")
+    plt.title("Silhouette analysis across different k")
+    plt.grid(True)
+    plt.show()
+
+    # Calinski-Harabasz Index for a range of k values
+    from sklearn.metrics import calinski_harabasz_score
+    # Define your range of cluster counts
+    k_values = range(5, 40, 5)
+    scores = []
+
+    for k in k_values:
+        model = MiniBatchKMeans(n_clusters=k, random_state=10)
+        labels = model.fit_predict(all_frames)
+        score = calinski_harabasz_score(all_frames, labels)
+        scores.append(score)
+
+    plt.figure(figsize=(8, 5))
+    plt.plot(k_values, scores, marker='o')
+    plt.title("Calinski-Harabasz Score vs Number of Clusters")
+    plt.xlabel("Number of Clusters (k)")
+    plt.ylabel("Calinski-Harabasz Score")
+    plt.grid(True)
+    plt.show()'''
+
+    final_k = 5 # set final k based on above analysis
     kmeans = MiniBatchKMeans(
         n_clusters=final_k, tol=1e-3, batch_size=batchsize, max_iter=max_iter
     )
