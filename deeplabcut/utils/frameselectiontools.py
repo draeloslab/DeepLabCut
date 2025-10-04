@@ -527,7 +527,7 @@ def KmeansbasedFrameselectioncv2(
 
     # --- minimal change: pick multiple frames per cluster (no other edits) ---
     frames_per_cluster = 3  # << set how many you want from each cluster
-    rng = np.random.default_rng(647)  # optional: for reproducibility
+    rng = np.random.default_rng()  # optional: for reproducibility
 
     frames2pick = []
     print("Saving")
