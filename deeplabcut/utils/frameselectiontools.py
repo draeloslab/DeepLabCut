@@ -515,7 +515,7 @@ def KmeansbasedFrameselectioncv2(
     plt.grid(True)
     plt.show()'''
 
-    final_k = 30 # set final k based on above analysis
+    final_k = 5 # set final k based on above analysis
     kmeans = MiniBatchKMeans(
         n_clusters=final_k, tol=1e-3, batch_size=batchsize, max_iter=max_iter
     )
@@ -526,7 +526,7 @@ def KmeansbasedFrameselectioncv2(
     #tsne_embedding = TSNE(n_components=2, perplexity=30, n_iter=1000, random_state=42).fit_transform(all_frames)
 
     # --- minimal change: pick multiple frames per cluster (no other edits) ---
-    frames_per_cluster = 3  # << set how many you want from each cluster
+    frames_per_cluster = 2 # << set how many you want from each cluster
     rng = np.random.default_rng()  # optional: for reproducibility
 
     frames2pick = []
