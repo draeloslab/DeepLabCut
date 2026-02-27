@@ -445,7 +445,7 @@ def KmeansbasedFrameselectioncv2(
     import seaborn as sns
     from sklearn.cluster import MiniBatchKMeans
 
-    # DBI to find optimal k
+    '''# DBI to find optimal k
     from sklearn.metrics import davies_bouldin_score
     k_values = range(5, 40, 5)  # Example k values to try
     dbi_scores = []
@@ -513,9 +513,9 @@ def KmeansbasedFrameselectioncv2(
     plt.xlabel("Number of Clusters (k)")
     plt.ylabel("Calinski-Harabasz Score")
     plt.grid(True)
-    plt.show()
+    plt.show()'''
 
-    '''final_k = 5 # set final k based on above analysis
+    final_k = 30 # set final k based on above analysis
     kmeans = MiniBatchKMeans(
         n_clusters=final_k, tol=1e-3, batch_size=batchsize, max_iter=max_iter
     )
@@ -579,7 +579,7 @@ def KmeansbasedFrameselectioncv2(
                     print("Frame", frame_number, "not found!")
                     is_valid.append(False)
 
-                cap.release()'''
+                cap.release()
 
     if not any(is_valid):
         print("All selected frames were invalid or could not be saved.")
